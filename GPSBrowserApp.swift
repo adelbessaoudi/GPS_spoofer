@@ -2,19 +2,12 @@
 //  GPSBrowserApp.swift
 //  External GPS Receiver & Network Coordinator
 //
-//  A native iOS application using Swift, SwiftUI, and MapKit that acts as a
-//  high-precision network GPS coordinate receiver with an Apple-style design.
-//
-//  Key Features:
-//  1. Asynchronous TCP / UDP Network Listener (Network.framework / NWConnection)
-//     connecting to an ESP32 or Android GPS streamer on local Wi-Fi (default 192.168.4.1:10110).
-//  2. High-performance NMEA 0183 Parser supporting $GPGGA, $GNGGA, $GPRMC, $GNRMC.
-//  3. Apple-style Human Interface Design: Hero coordinate card, live MKMapView radar tracking,
-//     telemetry grid (altitude, speed, heading, accuracy, satellites), and raw NMEA inspector.
+//  A native iOS application using pure SwiftUI, UIKit, and Network.framework
+//  that acts as a high-precision network GPS coordinate receiver with an Apple-style design.
 //
 
 import SwiftUI
-import MapKit
+import UIKit
 import Network
 import Combine
 
@@ -39,17 +32,13 @@ struct GPSCoordinate: Equatable {
     var latitude: Double = 37.774929       // Default: San Francisco
     var longitude: Double = -122.419416
     var altitude: Double = 15.0            // Meters
-    var accuracy: Double = 2.5             // Meters
+    var accuracy: Double = 2.5             // Estimated accuracy in meters
     var speed: Double = 0.0                // Meters per second
     var heading: Double = 0.0              // Degrees (0-360)
     var satellites: Int = 9
     var fixQuality: String = "GPS 3D Fix"
     var timestamp: Date = Date()
     var sentenceType: String = "$GPGGA"
-    
-    var clCoordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
     
     var formattedLatitude: String {
         let direction = latitude >= 0 ? "N" : "S"
@@ -88,19 +77,10 @@ enum NetworkConnectionState: Equatable {
     
     var statusColor: Color {
         switch self {
-        case .disconnected: return .secondary
-        case .connecting: return .orange
-        case .connected: return .green
-        case .failed: return .red
-        }
-    }
-    
-    var statusIcon: String {
-        switch self {
-        case .disconnected: return "antenna.radiowaves.left.and.right.slash"
-        case .connecting: return "antenna.radiowaves.left.and.right"
-        case .connected: return "antenna.radiowaves.left.and.right"
-        case .failed: return "exclamationmark.triangle.fill"
+        case .disconnected: return Color.gray
+        case .connecting: return Color.orange
+        case .connected: return Color.green
+        case .failed: return Color.red
         }
     }
 }
@@ -382,47 +362,6 @@ final class GPSNetworkManager: ObservableObject {
     }
 }
 
-// MARK: - Native Apple Map View Wrapper (MKMapView)
-
-struct NativeMapView: UIViewRepresentable {
-    let coordinate: CLLocationCoordinate2D
-    let heading: Double
-    
-    func makeUIView(context: Context) -> MKMapView {
-        let mapView = MKMapView(frame: .zero)
-        mapView.isRotateEnabled = true
-        mapView.isPitchEnabled = true
-        mapView.showsBuildings = true
-        mapView.showsCompass = true
-        mapView.layer.cornerRadius = 18
-        mapView.clipsToBounds = true
-        
-        let annotation = MKPointAnnotation()
-        annotation.coordinate = coordinate
-        annotation.title = "Target Coordinator"
-        mapView.addAnnotation(annotation)
-        context.coordinator.annotation = annotation
-        
-        let span = MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
-        let region = MKCoordinateRegion(center: coordinate, span: span)
-        mapView.setRegion(region, animated: false)
-        return mapView
-    }
-    
-    func updateUIView(_ uiView: MKMapView, context: Context) {
-        UIView.animate(withDuration: 0.4) {
-            context.coordinator.annotation?.coordinate = coordinate
-            uiView.setCenter(coordinate, animated: true)
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    
-    class Coordinator: NSObject {
-        var annotation: MKPointAnnotation?
-    }
-}
-
 // MARK: - Apple-Style SwiftUI User Interface
 
 struct GPSDashboardView: View {
@@ -433,20 +372,19 @@ struct GPSDashboardView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background matching Apple System Grouped Background
-                Color(.systemGroupedBackground)
+                Color(UIColor.systemGroupedBackground)
                     .ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 16) {
                         // 1. Connection Status Banner
                         statusHeaderCard
                         
                         // 2. Hero Coordinates Display Card
                         heroCoordinateCard
                         
-                        // 3. Live Apple Map Tracking Card
-                        mapViewCard
+                        // 3. Apple-style Radar Target Visualizer
+                        radarVisualizerCard
                         
                         // 4. Telemetry Metrics 4x Grid
                         telemetryMetricsGrid
@@ -469,7 +407,7 @@ struct GPSDashboardView: View {
                     Button(action: { isShowingSettingsSheet = true }) {
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(.blue)
                     }
                 }
             }
@@ -508,7 +446,6 @@ struct GPSDashboardView: View {
     // MARK: - 1. Status Header Card
     private var statusHeaderCard: some View {
         HStack(spacing: 12) {
-            // Pulsing dot indicator
             ZStack {
                 Circle()
                     .fill(gpsManager.connectionState.statusColor)
@@ -535,7 +472,6 @@ struct GPSDashboardView: View {
             
             Spacer()
             
-            // Connect / Disconnect Toggle Button
             Button(action: {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 gpsManager.toggleConnection()
@@ -554,7 +490,7 @@ struct GPSDashboardView: View {
             }
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
     }
@@ -592,7 +528,7 @@ struct GPSDashboardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color(.tertiarySystemGroupedBackground))
+                .background(Color(UIColor.tertiarySystemGroupedBackground))
                 .cornerRadius(12)
                 
                 // Longitude Box
@@ -608,7 +544,7 @@ struct GPSDashboardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color(.tertiarySystemGroupedBackground))
+                .background(Color(UIColor.tertiarySystemGroupedBackground))
                 .cornerRadius(12)
             }
             
@@ -638,37 +574,63 @@ struct GPSDashboardView: View {
             }
         }
         .padding(18)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
     
-    // MARK: - 3. Live Apple Map View Card
-    private var mapViewCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    // MARK: - 3. Apple-style Radar Target Visualizer
+    private var radarVisualizerCard: some View {
+        VStack(spacing: 12) {
             HStack {
-                Label("MAP TRACKING", systemImage: "map.fill")
+                Label("SIGNAL RADAR", systemImage: "dot.radiowaves.left.and.right")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.secondary)
                 Spacer()
-                Text("Live Position Pin")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                Text(gpsManager.connectionState == .connected ? "LOCKED" : "STANDBY")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(gpsManager.connectionState == .connected ? .green : .secondary)
             }
             
-            NativeMapView(
-                coordinate: gpsManager.currentCoordinate.clCoordinate,
-                heading: gpsManager.currentCoordinate.heading
-            )
-            .frame(height: 200)
+            ZStack {
+                // Radar Rings
+                Circle()
+                    .stroke(Color.blue.opacity(0.12), lineWidth: 1)
+                    .frame(width: 140, height: 140)
+                Circle()
+                    .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                    .frame(width: 90, height: 90)
+                Circle()
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    .frame(width: 40, height: 40)
+                
+                // Crosshairs
+                Rectangle()
+                    .fill(Color.blue.opacity(0.15))
+                    .frame(width: 1, height: 150)
+                Rectangle()
+                    .fill(Color.blue.opacity(0.15))
+                    .frame(width: 150, height: 1)
+                
+                // Target Beacon
+                VStack(spacing: 2) {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: Color.blue.opacity(0.6), radius: 6)
+                    
+                    Text("COORDINATOR")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.blue)
+                }
+            }
+            .frame(height: 160)
+            .frame(maxWidth: .infinity)
+            .background(Color(UIColor.tertiarySystemGroupedBackground))
             .cornerRadius(14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(.separator), lineWidth: 0.5)
-            )
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
@@ -703,7 +665,7 @@ struct GPSDashboardView: View {
             MetricCard(
                 title: "ACCURACY",
                 value: String(format: "±%.1f m", gpsManager.currentCoordinate.accuracy),
-                subtitle: "HDOP Fix",
+                subtitle: "Estimated fix",
                 icon: "scope",
                 accentColor: .green
             )
@@ -730,11 +692,11 @@ struct GPSDashboardView: View {
                 .foregroundColor(gpsManager.lastRawSentence.isEmpty ? .secondary : .primary)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.tertiarySystemGroupedBackground))
+                .background(Color(UIColor.tertiarySystemGroupedBackground))
                 .cornerRadius(10)
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
@@ -771,7 +733,7 @@ struct GPSDashboardView: View {
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
@@ -812,7 +774,7 @@ struct MetricCard: some View {
             }
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
     }
@@ -826,7 +788,7 @@ struct PillButtonStyle: ButtonStyle {
             .font(.system(size: 12, weight: .medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(.tertiarySystemGroupedBackground))
+            .background(Color(UIColor.tertiarySystemGroupedBackground))
             .foregroundColor(.primary)
             .clipShape(Capsule())
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
@@ -837,7 +799,7 @@ struct PillButtonStyle: ButtonStyle {
 
 struct NetworkConfigurationSheet: View {
     @EnvironmentObject var gpsManager: GPSNetworkManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationView {
@@ -877,7 +839,7 @@ struct NetworkConfigurationSheet: View {
                 Section {
                     Button(action: {
                         gpsManager.toggleConnection()
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }) {
                         HStack {
                             Spacer()
@@ -894,7 +856,7 @@ struct NetworkConfigurationSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                     .fontWeight(.semibold)
                 }
