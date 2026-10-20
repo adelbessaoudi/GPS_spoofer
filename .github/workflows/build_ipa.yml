@@ -24,9 +24,9 @@ jobs:
 
       - name: Select a compatible Xcode version
         run: |
-          sudo xcode-select -switch /Applications/Xcode_16.4.app || \
-          sudo xcode-select -switch /Applications/Xcode_16.3.app || \
           sudo xcode-select -switch /Applications/Xcode_16.2.app || \
+          sudo xcode-select -switch /Applications/Xcode_16.1.app || \
+          sudo xcode-select -switch /Applications/Xcode_16.0.app || \
           sudo xcode-select -switch /Applications/Xcode.app
           xcodebuild -version
 
@@ -34,6 +34,7 @@ jobs:
         run: |
           mkdir -p build/Payload
 
+          set -o pipefail
           xcodebuild build \
             -project GPSBrowser.xcodeproj \
             -scheme GPSBrowser \
@@ -43,7 +44,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO
+            ENTITLEMENTS_REQUIRED=NO 2>&1 | tee build.log || {
+              echo "::error::=== XCODEBUILD FAILED ==="
+              grep -E "(error:|fatal error:)" build.log | while read line; do
+                echo "::error::$line"
+              done
+              exit 1
+            }
 
       - name: Package IPA
         run: |
