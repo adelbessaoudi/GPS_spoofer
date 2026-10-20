@@ -36,19 +36,29 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     
+    <!-- Background Execution Modes: Keep network socket and parsing running in background -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>location</string>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+    
     <!-- Required for NWConnection TCP/UDP on local Wi-Fi -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Connects to local Wi-Fi GPS coordinator devices (ESP32/Android) for NMEA coordinates.</string>
+    <string>Connects to local Wi-Fi GPS coordinator devices (ESP32/Android) for continuous NMEA coordinates.</string>
     
-    <!-- Allows WKWebView to load any HTTP/HTTPS site -->
+    <!-- Permissions for continuous background keep-alive -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>GPS Receiver requires location authorization to maintain continuous background telemetry with your coordinator.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>GPS Receiver requires background location access to receive real-time network coordinates while running in the background.</string>
+    
+    <!-- Allows arbitrary network calls -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-    
-    <!-- Fallback if webview requests native location -->
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Used as a fallback for web page location requests.</string>
 </dict>
 </plist>

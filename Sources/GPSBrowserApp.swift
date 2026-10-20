@@ -2,12 +2,15 @@
 //  GPSBrowserApp.swift
 //  External GPS Receiver & Network Coordinator
 //
-//  A native iOS application using Swift, SwiftUI, and Network.framework
-//  that acts as a high-precision network GPS coordinate receiver with an Apple-style design.
+//  A native iOS application using Swift, SwiftUI, CoreLocation, and Network.framework
+//  that receives network GPS coordinates, runs continuously in the background,
+//  and treats incoming NMEA stream data as the primary coordinate source.
 //
 
 import SwiftUI
 import Foundation
+import UIKit
+import CoreLocation
 import Network
 import Combine
 
@@ -16,11 +19,13 @@ import Combine
 @main
 struct GPSBrowserApp: App {
     @StateObject private var gpsManager = GPSNetworkManager()
+    @StateObject private var keepAliveManager = BackgroundKeepAliveManager()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(gpsManager)
+                .environmentObject(keepAliveManager)
         }
     }
 }
@@ -90,6 +95,78 @@ enum TransportProtocol: String, CaseIterable, Identifiable {
     case tcp = "TCP"
     case udp = "UDP"
     var id: String { rawValue }
+}
+
+// MARK: - Background Keep-Alive Manager
+
+/// Manages background execution and prevents iOS from suspending the network listener.
+final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published var isBackgroundExecutionEnabled: Bool = true {
+        didSet {
+            if isBackgroundExecutionEnabled {
+                startKeepAlive()
+            } else {
+                stopKeepAlive()
+            }
+        }
+    }
+    
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    private let locationManager = CLLocationManager()
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
+    
+    override init() {
+        super.init()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.pausesLocationUpdatesAutomatically = false
+        locationManager.showsBackgroundLocationIndicator = true
+        
+        requestAuthorization()
+        startKeepAlive()
+    }
+    
+    func requestAuthorization() {
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestAlwaysAuthorization()
+    }
+    
+    func startKeepAlive() {
+        locationManager.startUpdatingLocation()
+    }
+    
+    func stopKeepAlive() {
+        locationManager.stopUpdatingLocation()
+    }
+    
+    func beginBackgroundTask() {
+        guard bgTask == .invalid else { return }
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "com.gpsreceiver.streamkeepalive") { [weak self] in
+            self?.endBackgroundTask()
+        }
+    }
+    
+    func endBackgroundTask() {
+        if bgTask != .invalid {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+    }
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        DispatchQueue.main.async {
+            self.authorizationStatus = manager.authorizationStatus
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // Silent location tick to prevent iOS from sleeping the thread while in background
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // Silently ignore fallback errors
+    }
 }
 
 // MARK: - NMEA 0183 Parser
@@ -206,6 +283,7 @@ final class GPSNetworkManager: ObservableObject {
     @Published var packetsReceivedCount: Int = 0
     @Published var lastRawSentence: String = ""
     @Published var autoReconnect: Bool = true
+    @Published var isPrimaryLocationSource: Bool = true
     
     private var connection: NWConnection?
     private let networkQueue = DispatchQueue(label: "com.gpsreceiver.network", qos: .userInitiated)
@@ -366,6 +444,8 @@ final class GPSNetworkManager: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject var gpsManager: GPSNetworkManager
+    @EnvironmentObject var keepAliveManager: BackgroundKeepAliveManager
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isConfigExpanded: Bool = true
     
     var body: some View {
@@ -376,25 +456,28 @@ struct ContentView: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // 1. Connection Status Banner
+                        // 1. Connection & Primary Source Status Banner
                         statusHeaderCard
                         
-                        // 2. Hero Coordinates Display Card
+                        // 2. Background Keep-Alive & Primary Provider Card
+                        backgroundControlCard
+                        
+                        // 3. Hero Coordinates Display Card
                         heroCoordinateCard
                         
-                        // 3. Apple-style Radar Target Visualizer
+                        // 4. Apple-style Radar Target Visualizer
                         radarVisualizerCard
                         
-                        // 4. Telemetry Metrics 4x Grid
+                        // 5. Telemetry Metrics 4x Grid
                         telemetryMetricsGrid
                         
-                        // 5. Network Configuration Card
+                        // 6. Network Configuration Card
                         networkConfigurationCard
                         
-                        // 6. Network Stream & NMEA Inspector Card
+                        // 7. Network Stream & NMEA Inspector Card
                         streamInspectorCard
                         
-                        // 7. Test Simulator Controls
+                        // 8. Test Simulator Controls
                         simulatorPresetsCard
                     }
                     .padding(.horizontal, 16)
@@ -404,6 +487,13 @@ struct ContentView: View {
             }
             .navigationTitle("GPS Receiver")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: scenePhase) { newPhase in
+                if newPhase == .background {
+                    keepAliveManager.beginBackgroundTask()
+                } else if newPhase == .active {
+                    keepAliveManager.endBackgroundTask()
+                }
+            }
         }
     }
     
@@ -458,13 +548,54 @@ struct ContentView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
     }
     
-    // MARK: - 2. Hero Coordinates Display Card
+    // MARK: - 2. Background Keep-Alive & Primary Mode Card
+    private var backgroundControlCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .foregroundColor(.blue)
+                        .font(.system(size: 13))
+                    Text("PRIMARY COORDINATE SOURCE")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.blue)
+                }
+                Spacer()
+                Text("NETWORK GPS")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.12))
+                    .foregroundColor(.blue)
+                    .clipShape(Capsule())
+            }
+            
+            Divider()
+            
+            Toggle(isOn: $keepAliveManager.isBackgroundExecutionEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Background Keep-Alive")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Keeps network stream receiving coordinates when app is minimized or phone locked.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .tint(.green)
+        }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
+    }
+    
+    // MARK: - 3. Hero Coordinates Display Card
     private var heroCoordinateCard: some View {
         VStack(spacing: 16) {
             HStack {
                 Label("LIVE COORDINATES", systemImage: "location.north.circle.fill")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.blue)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
@@ -530,7 +661,7 @@ struct ContentView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
     
-    // MARK: - 3. Apple-style Radar Target Visualizer
+    // MARK: - 4. Apple-style Radar Target Visualizer
     private var radarVisualizerCard: some View {
         VStack(spacing: 12) {
             HStack {
@@ -586,7 +717,7 @@ struct ContentView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
     
-    // MARK: - 4. Telemetry Metrics 4x Grid
+    // MARK: - 5. Telemetry Metrics 4x Grid
     private var telemetryMetricsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
             MetricCard(
@@ -623,7 +754,7 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - 5. Network Configuration Card
+    // MARK: - 6. Network Configuration Card
     private var networkConfigurationCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -701,7 +832,7 @@ struct ContentView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
     
-    // MARK: - 6. Stream Inspector Card
+    // MARK: - 7. Stream Inspector Card
     private var streamInspectorCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -730,7 +861,7 @@ struct ContentView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
     
-    // MARK: - 7. Test Simulator Controls
+    // MARK: - 8. Test Simulator Controls
     private var simulatorPresetsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SIMULATE COORDINATES (TESTING)")
@@ -843,5 +974,6 @@ struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
             .environmentObject(GPSNetworkManager())
+            .environmentObject(BackgroundKeepAliveManager())
     }
 }
