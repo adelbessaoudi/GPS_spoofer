@@ -798,7 +798,7 @@ struct ContentView: View {
 
 // MARK: - Telemetry Metric Card Component
 
-struct MetricCard: some View {
+struct MetricCard: View {
     let title: String
     let value: String
     let subtitle: String
