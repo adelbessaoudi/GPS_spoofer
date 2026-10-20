@@ -8,7 +8,6 @@
 
 import SwiftUI
 import Foundation
-import UIKit
 import Network
 import Combine
 
@@ -71,7 +70,7 @@ enum NetworkConnectionState: Equatable {
         switch self {
         case .disconnected: return "Disconnected"
         case .connecting: return "Connecting..."
-        case .connected: return "Connected"
+        case .connected: return "Receiving Stream"
         case .failed: return "Connection Failed"
         }
     }
@@ -367,13 +366,12 @@ final class GPSNetworkManager: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject var gpsManager: GPSNetworkManager
-    @State private var isShowingSettingsSheet = false
-    @State private var isCopiedNotification = false
+    @State private var isConfigExpanded: Bool = true
     
     var body: some View {
         NavigationView {
             ZStack {
-                Color(UIColor.systemGroupedBackground)
+                Color(.systemGroupedBackground)
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -390,10 +388,13 @@ struct ContentView: View {
                         // 4. Telemetry Metrics 4x Grid
                         telemetryMetricsGrid
                         
-                        // 5. Network Stream & NMEA Inspector Card
+                        // 5. Network Configuration Card
+                        networkConfigurationCard
+                        
+                        // 6. Network Stream & NMEA Inspector Card
                         streamInspectorCard
                         
-                        // 6. Test Simulator Controls
+                        // 7. Test Simulator Controls
                         simulatorPresetsCard
                     }
                     .padding(.horizontal, 16)
@@ -403,44 +404,6 @@ struct ContentView: View {
             }
             .navigationTitle("GPS Receiver")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { isShowingSettingsSheet = true }) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.blue)
-                    }
-                }
-            }
-            .sheet(isPresented: $isShowingSettingsSheet) {
-                NetworkConfigurationSheet()
-                    .environmentObject(gpsManager)
-            }
-            .overlay(
-                // Toast notification when coordinates copied
-                Group {
-                    if isCopiedNotification {
-                        VStack {
-                            Spacer()
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("Coordinates copied to clipboard")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(24)
-                            .shadow(color: Color.black.opacity(0.15), radius: 10, y: 5)
-                            .padding(.bottom, 24)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
-                    }
-                }
-                .animation(.spring(), value: isCopiedNotification)
-            )
         }
     }
     
@@ -474,8 +437,6 @@ struct ContentView: View {
             Spacer()
             
             Button(action: {
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
                 gpsManager.toggleConnection()
             }) {
                 HStack(spacing: 5) {
@@ -492,7 +453,7 @@ struct ContentView: View {
             }
         }
         .padding(14)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
     }
@@ -530,7 +491,7 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color(UIColor.tertiarySystemGroupedBackground))
+                .background(Color(.tertiarySystemGroupedBackground))
                 .cornerRadius(12)
                 
                 // Longitude Box
@@ -546,38 +507,25 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color(UIColor.tertiarySystemGroupedBackground))
+                .background(Color(.tertiarySystemGroupedBackground))
                 .cornerRadius(12)
             }
             
-            // Bottom Action Strip: Quick Copy & Decimal Degrees
+            // Decimal Degrees row
             HStack {
-                Text("\(String(format: "%.6f", gpsManager.currentCoordinate.latitude)), \(String(format: "%.6f", gpsManager.currentCoordinate.longitude))")
+                Text("Decimal: \(String(format: "%.6f", gpsManager.currentCoordinate.latitude)), \(String(format: "%.6f", gpsManager.currentCoordinate.longitude))")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(.secondary)
                 
                 Spacer()
                 
-                Button(action: {
-                    UIPasteboard.general.string = "\(gpsManager.currentCoordinate.latitude), \(gpsManager.currentCoordinate.longitude)"
-                    let notification = UINotificationFeedbackGenerator()
-                    notification.notificationOccurred(.success)
-                    isCopiedNotification = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        isCopiedNotification = false
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.on.doc")
-                        Text("Copy")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.blue)
-                }
+                Text("Fix: \(gpsManager.currentCoordinate.sentenceType)")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
             }
         }
         .padding(18)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
@@ -618,22 +566,22 @@ struct ContentView: View {
                 // Target Beacon
                 VStack(spacing: 2) {
                     Circle()
-                        .fill(Color.blue)
+                        .fill(gpsManager.connectionState == .connected ? Color.green : Color.blue)
                         .frame(width: 12, height: 12)
-                        .shadow(color: Color.blue.opacity(0.6), radius: 6)
+                        .shadow(color: (gpsManager.connectionState == .connected ? Color.green : Color.blue).opacity(0.6), radius: 6)
                     
-                    Text("COORDINATOR")
+                    Text(gpsManager.connectionState == .connected ? "ONLINE" : "READY")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundColor(.blue)
+                        .foregroundColor(gpsManager.connectionState == .connected ? .green : .blue)
                 }
             }
             .frame(height: 160)
             .frame(maxWidth: .infinity)
-            .background(Color(UIColor.tertiarySystemGroupedBackground))
+            .background(Color(.tertiarySystemGroupedBackground))
             .cornerRadius(14)
         }
         .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
@@ -675,7 +623,85 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - 5. Stream Inspector Card
+    // MARK: - 5. Network Configuration Card
+    private var networkConfigurationCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("COORDINATOR CONNECTION", systemImage: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Button(action: {
+                    withAnimation { isConfigExpanded.toggle() }
+                }) {
+                    Image(systemName: isConfigExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                        .foregroundColor(.blue)
+                        .font(.system(size: 15))
+                }
+            }
+            
+            if isConfigExpanded {
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("IP Address")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            
+                            TextField("192.168.4.1", text: $gpsManager.ipAddress)
+                                .keyboardType(.numbersAndPunctuation)
+                                .font(.system(size: 14, design: .monospaced))
+                                .padding(8)
+                                .background(Color(.tertiarySystemGroupedBackground))
+                                .cornerRadius(8)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Port")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            
+                            TextField("10110", text: $gpsManager.portString)
+                                .keyboardType(.numberPad)
+                                .font(.system(size: 14, design: .monospaced))
+                                .padding(8)
+                                .background(Color(.tertiarySystemGroupedBackground))
+                                .cornerRadius(8)
+                        }
+                        .frame(width: 80)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Proto")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            
+                            Picker("Protocol", selection: $gpsManager.selectedProtocol) {
+                                ForEach(TransportProtocol.allCases) { proto in
+                                    Text(proto.rawValue).tag(proto)
+                                }
+                            }
+                            .pickerStyle(SegmentedPickerStyle())
+                            .frame(width: 85)
+                        }
+                    }
+                    
+                    Toggle(isOn: $gpsManager.autoReconnect) {
+                        Text("Auto Reconnect")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .padding(.top, 2)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(18)
+        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+    }
+    
+    // MARK: - 6. Stream Inspector Card
     private var streamInspectorCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -695,16 +721,16 @@ struct ContentView: View {
                 .foregroundColor(gpsManager.lastRawSentence.isEmpty ? .secondary : .primary)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(UIColor.tertiarySystemGroupedBackground))
+                .background(Color(.tertiarySystemGroupedBackground))
                 .cornerRadius(10)
         }
         .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
     
-    // MARK: - 6. Test Simulator Controls
+    // MARK: - 7. Test Simulator Controls
     private var simulatorPresetsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SIMULATE COORDINATES (TESTING)")
@@ -720,7 +746,7 @@ struct ContentView: View {
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .background(Color(.tertiarySystemGroupedBackground))
                             .foregroundColor(.primary)
                             .clipShape(Capsule())
                     }
@@ -732,7 +758,7 @@ struct ContentView: View {
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .background(Color(.tertiarySystemGroupedBackground))
                             .foregroundColor(.primary)
                             .clipShape(Capsule())
                     }
@@ -744,7 +770,7 @@ struct ContentView: View {
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .background(Color(.tertiarySystemGroupedBackground))
                             .foregroundColor(.primary)
                             .clipShape(Capsule())
                     }
@@ -756,7 +782,7 @@ struct ContentView: View {
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .background(Color(.tertiarySystemGroupedBackground))
                             .foregroundColor(.primary)
                             .clipShape(Capsule())
                     }
@@ -764,7 +790,7 @@ struct ContentView: View {
             }
         }
         .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
@@ -805,79 +831,9 @@ struct MetricCard: some View {
             }
         }
         .padding(14)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
-    }
-}
-
-// MARK: - Network Configuration Sheet
-
-struct NetworkConfigurationSheet: View {
-    @EnvironmentObject var gpsManager: GPSNetworkManager
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("COORDINATOR DEVICE")) {
-                    HStack {
-                        Text("IP Address")
-                        Spacer()
-                        TextField("192.168.4.1", text: $gpsManager.ipAddress)
-                            .multilineTextAlignment(.trailing)
-                            .keyboardType(.numbersAndPunctuation)
-                            .autocapitalization(.none)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    
-                    HStack {
-                        Text("Port")
-                        Spacer()
-                        TextField("10110", text: $gpsManager.portString)
-                            .multilineTextAlignment(.trailing)
-                            .keyboardType(.numberPad)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    
-                    Picker("Protocol", selection: $gpsManager.selectedProtocol) {
-                        ForEach(TransportProtocol.allCases) { proto in
-                            Text(proto.rawValue).tag(proto)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-                
-                Section(header: Text("CONNECTION SETTINGS")) {
-                    Toggle("Auto Reconnect", isOn: $gpsManager.autoReconnect)
-                }
-                
-                Section {
-                    Button(action: {
-                        gpsManager.toggleConnection()
-                        dismiss()
-                    }) {
-                        HStack {
-                            Spacer()
-                            Text(gpsManager.connectionState == .connected ? "Disconnect Stream" : "Connect Stream")
-                                .fontWeight(.semibold)
-                                .foregroundColor(gpsManager.connectionState == .connected ? .red : .blue)
-                            Spacer()
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Network Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
     }
 }
 

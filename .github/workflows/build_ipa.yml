@@ -34,6 +34,7 @@ jobs:
         run: |
           mkdir -p build/Payload
 
+          set -o pipefail
           xcodebuild build \
             -project GPSBrowser.xcodeproj \
             -scheme GPSBrowser \
@@ -43,18 +44,21 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO 2>&1 | tee build.log
-
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+            ENTITLEMENTS_REQUIRED=NO 2>&1 | tee build.log || {
+              echo "=== BUILD FAILED: PRINTING COMPILER ERRORS ==="
+              cat build.log | grep -A 2 -E "(error:|fatal error:)" || tail -n 80 build.log
+              exit 1
+            }
 
       - name: Package IPA
         run: |
           APP_PATH=$(find derived_data/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "=== ERROR: No .app bundle produced! ==="
+            find derived_data -type d -name "*.app"
+            exit 1
+          fi
+          
           echo "Packaging application from: $APP_PATH"
           cp -r "$APP_PATH" build/Payload/
           cd build
