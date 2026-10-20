@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: Build Unsigned IPA
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
@@ -22,15 +22,18 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Select Xcode
+      - name: Select a compatible Xcode version
         run: |
-          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          sudo xcode-select -switch /Applications/Xcode_16.4.app || \
+          sudo xcode-select -switch /Applications/Xcode_16.3.app || \
+          sudo xcode-select -switch /Applications/Xcode_16.2.app || \
+          sudo xcode-select -switch /Applications/Xcode.app
           xcodebuild -version
 
       - name: Build Application Bundle
         run: |
           mkdir -p build/Payload
-          
+
           xcodebuild build \
             -project GPSBrowser.xcodeproj \
             -scheme GPSBrowser \
