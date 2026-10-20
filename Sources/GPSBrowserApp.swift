@@ -2,11 +2,12 @@
 //  GPSBrowserApp.swift
 //  External GPS Receiver & Network Coordinator
 //
-//  A native iOS application using pure SwiftUI, UIKit, and Network.framework
+//  A native iOS application using Swift, SwiftUI, and Network.framework
 //  that acts as a high-precision network GPS coordinate receiver with an Apple-style design.
 //
 
 import SwiftUI
+import Foundation
 import UIKit
 import Network
 import Combine
@@ -19,7 +20,7 @@ struct GPSBrowserApp: App {
 
     var body: some Scene {
         WindowGroup {
-            GPSDashboardView()
+            ContentView()
                 .environmentObject(gpsManager)
         }
     }
@@ -70,7 +71,7 @@ enum NetworkConnectionState: Equatable {
         switch self {
         case .disconnected: return "Disconnected"
         case .connecting: return "Connecting..."
-        case .connected: return "Receiving Stream"
+        case .connected: return "Connected"
         case .failed: return "Connection Failed"
         }
     }
@@ -364,7 +365,7 @@ final class GPSNetworkManager: ObservableObject {
 
 // MARK: - Apple-Style SwiftUI User Interface
 
-struct GPSDashboardView: View {
+struct ContentView: View {
     @EnvironmentObject var gpsManager: GPSNetworkManager
     @State private var isShowingSettingsSheet = false
     @State private var isCopiedNotification = false
@@ -456,7 +457,7 @@ struct GPSDashboardView: View {
                         .stroke(gpsManager.connectionState.statusColor.opacity(0.4), lineWidth: 4)
                         .scaleEffect(1.8)
                         .opacity(0.0)
-                        .animation(.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: gpsManager.connectionState)
+                        .animation(.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: gpsManager.connectionState == .connected)
                 }
             }
             
@@ -473,7 +474,8 @@ struct GPSDashboardView: View {
             Spacer()
             
             Button(action: {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
                 gpsManager.toggleConnection()
             }) {
                 HStack(spacing: 5) {
@@ -558,7 +560,8 @@ struct GPSDashboardView: View {
                 
                 Button(action: {
                     UIPasteboard.general.string = "\(gpsManager.currentCoordinate.latitude), \(gpsManager.currentCoordinate.longitude)"
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    let notification = UINotificationFeedbackGenerator()
+                    notification.notificationOccurred(.success)
                     isCopiedNotification = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         isCopiedNotification = false
@@ -710,25 +713,53 @@ struct GPSDashboardView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    Button("📍 Minneapolis (44.97, -93.26)") {
+                    Button(action: {
                         gpsManager.injectTestCoordinate(lat: 44.9778, lon: -93.2650, name: "Minneapolis HQ")
+                    }) {
+                        Text("📍 Minneapolis")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
                     }
-                    .buttonStyle(PillButtonStyle())
                     
-                    Button("🗽 NYC (40.75, -73.98)") {
+                    Button(action: {
                         gpsManager.injectTestCoordinate(lat: 40.7580, lon: -73.9855, name: "Times Square")
+                    }) {
+                        Text("🗽 NYC")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
                     }
-                    .buttonStyle(PillButtonStyle())
                     
-                    Button("🗼 Tokyo (35.65, 139.74)") {
+                    Button(action: {
                         gpsManager.injectTestCoordinate(lat: 35.6586, lon: 139.7454, name: "Tokyo Tower")
+                    }) {
+                        Text("🗼 Tokyo")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
                     }
-                    .buttonStyle(PillButtonStyle())
                     
-                    Button("🦘 Sydney (-33.85, 151.21)") {
+                    Button(action: {
                         gpsManager.injectTestCoordinate(lat: -33.8568, lon: 151.2153, name: "Sydney Harbour")
+                    }) {
+                        Text("🦘 Sydney")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
                     }
-                    .buttonStyle(PillButtonStyle())
                 }
             }
         }
@@ -777,21 +808,6 @@ struct MetricCard: some View {
         .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
-    }
-}
-
-// MARK: - Pill Button Style
-
-struct PillButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(UIColor.tertiarySystemGroupedBackground))
-            .foregroundColor(.primary)
-            .clipShape(Capsule())
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
     }
 }
 
@@ -867,9 +883,9 @@ struct NetworkConfigurationSheet: View {
 
 // MARK: - Preview Provider
 
-struct GPSDashboardView_Previews: PreviewProvider {
+struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        GPSDashboardView()
+        ContentView()
             .environmentObject(GPSNetworkManager())
     }
 }
