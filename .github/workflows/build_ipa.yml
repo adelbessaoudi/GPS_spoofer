@@ -1,0 +1,60 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Unsigned IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Build Application Bundle
+        run: |
+          mkdir -p build/Payload
+          
+          xcodebuild build \
+            -project GPSBrowser.xcodeproj \
+            -scheme GPSBrowser \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath derived_data \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            ENTITLEMENTS_REQUIRED=NO
+
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find derived_data/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
+          echo "Packaging application from: $APP_PATH"
+          cp -r "$APP_PATH" build/Payload/
+          cd build
+          zip -r GPSBrowser.ipa Payload
+          cd ..
+          ls -la build/GPSBrowser.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPSBrowser-iOS-IPA
+          path: build/GPSBrowser.ipa
+          retention-days: 14

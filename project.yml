@@ -1,0 +1,26 @@
+name: GPSBrowser
+options:
+  bundleIdPrefix: com.adelbessaoudi
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+targets:
+  GPSBrowser:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    info:
+      path: Sources/Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: GPSBrowser
+        PRODUCT_BUNDLE_IDENTIFIER: com.adelbessaoudi.GPSBrowser
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_FILE: Sources/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        DEVELOPMENT_TEAM: ""
+        GENERATE_INFOPLIST_KEY_UILaunchScreen_Generation: YES

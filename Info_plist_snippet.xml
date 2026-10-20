@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 1. Local Network Permission: Required for NWConnection TCP/UDP on Wi-Fi (iOS 14+) -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>GPS Browser requires local network access to connect to your external GPS coordinator (ESP32 / Android) and receive real-time NMEA streams.</string>
+
+    <!-- 2. Bonjour Services (Optional: if your ESP32 advertises mDNS/Bonjour) -->
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_nmea-0183._tcp</string>
+        <string>_nmea-0183._udp</string>
+        <string>_gps._tcp</string>
+    </array>
+
+    <!-- 3. App Transport Security: Allows loading both HTTP and HTTPS sites inside WKWebView -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+
+    <!-- 4. Location Permission Description (fallback if webview requests native prompt) -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Used as a fallback for web page location requests.</string>
+</dict>
+</plist>

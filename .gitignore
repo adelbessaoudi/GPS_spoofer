@@ -1,0 +1,24 @@
+# Xcode
+.DS_Store
+*/.DS_Store
+build/
+DerivedData/
+derived_data/
+*.moved-aside
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE / System
+.vscode/
+Thumbs.db
