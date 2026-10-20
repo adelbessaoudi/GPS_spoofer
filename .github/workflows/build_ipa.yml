@@ -34,7 +34,6 @@ jobs:
         run: |
           mkdir -p build/Payload
 
-          set -o pipefail
           xcodebuild build \
             -project GPSBrowser.xcodeproj \
             -scheme GPSBrowser \
@@ -44,13 +43,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            ENTITLEMENTS_REQUIRED=NO 2>&1 | tee build.log || {
-              echo "::error::=== XCODEBUILD FAILED ==="
-              grep -E "(error:|fatal error:)" build.log | while read line; do
-                echo "::error::$line"
-              done
-              exit 1
-            }
+            ENTITLEMENTS_REQUIRED=NO 2>&1 | tee build.log
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Package IPA
         run: |
